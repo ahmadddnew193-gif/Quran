@@ -1,55 +1,42 @@
 import streamlit as st
-import streamlit.components.v1 as components
 import datetime
 import requests
-import json
+import time
 
-BACKEND_URL = "http://localhost:5000"  # Replace with deployed backend URL if online
+st.set_page_config(page_title="Quran Reminder", layout="wide")
+st.title("📖 Quran Reminder")
 
-st.set_page_config(page_title="Quran Reminder", page_icon="📖")
-st.title("📖 Quran Reminder PWA")
+# Inputs
+time_choice = st.text_input("Choose Time (HH:MM)", value="17:45")
+channel_id = st.text_input("Discord Channel ID", value="YOUR_CHANNEL_ID")
+bot_token = st.text_input("Bot Token", type="password",value="xMTY5NjEzOTY2MDU2MjY0Mw.G-1SJh.FA5kGGRMo2T-EWgQAdK1O_qBB-KJp1Lsd6QRMU")
 
-# Inject manifest + service worker
-components.html("""
-<link rel="manifest" href="manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('service-worker.js')
-      .then(function(registration) { console.log('Service Worker registered:', registration.scope); })
-      .catch(function(err){ console.log('SW registration failed:', err); });
-  }
-</script>
-""", height=0)
+# Start button
+if st.button("Start Reminder"):
+    st.success(f"Reminder set for {time_choice}. App will check every minute.")
 
-# Time picker & Surah selection
-reminder_time = st.time_input("🕒 Set your daily Quran reminder time", value=datetime.time(8, 0))
-surah = st.selectbox("📖 Choose today's Surah", ["Al-Fatiha", "Al-Baqarah", "Al-Imran", "An-Nisa", "Al-Ma'idah"])
+    # Run loop for 60 minutes max
 
-st.success(f"Reminder set for {reminder_time.strftime('%I:%M %p')} to read {surah}")
+    while True:
+        time.sleep(10)  # Wait 1 minute before checking again
+        current_time = datetime.datetime.now().strftime("%H:%M")
+        st.write(f"Current time: {current_time}")
 
-# Enable notifications
-st.markdown(f"""
-<button onclick="
-navigator.serviceWorker.ready.then(async function(reg) {{
-    const sub = await reg.pushManager.subscribe({{
-        userVisibleOnly: true,
-        applicationServerKey: '{'YOUR_PUBLIC_KEY'}'
-    }});
-    fetch('{BACKEND_URL}/subscribe', {{
-        method: 'POST',
-        headers: {{'Content-Type': 'application/json'}},
-        body: JSON.stringify(sub)
-    }});
-    alert('Notifications enabled!');
-}});
-">Enable Notifications</button>
-""", unsafe_allow_html=True)
+        if current_time == time_choice:
+            url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+            headers = {
+                "Authorization": f"Bot {bot_token}",
+                "Content-Type": "application/json"
+            }
+            data = {"content": " @everyone 🕋 Time to read Quran!"}
 
-# Send reminder now
-if st.button("🔔 Send Reminder Now"):
-    data = {"title": "📖 Quran Reminder", "body": f"Time to read {surah}!"}
-    res = requests.post(f"{BACKEND_URL}/send", json=data)
-    if res.ok:
-        st.success("Reminder sent!")
-    else:
-        st.error("Failed to send reminder.")
+            response = requests.post(url, headers=headers, json=data)
+
+            if response.status_code in [200, 201]:
+                st.success("✅ Reminder sent to Discord!")
+                time.sleep(60)
+            else:
+                st.error(f"❌ Failed to send message: {response.status_code}")
+            
+
+        
