@@ -1,11 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import datetime
-import requests
-import threading
 import json
-
-from flask import Flask, request
 from pywebpush import webpush, WebPushException
 
 # ===================
@@ -15,33 +11,17 @@ from pywebpush import webpush, WebPushException
 VAPID_PUBLIC_KEY = "BMceqKk9S3NwZQDRVoHSQxMGT3xbLgm_Ve4PpJ4YOwp-i6FhqNNeta0UcWh5IEpiEdfvzmV245t8wR6wtJa7bJs"
 VAPID_PRIVATE_KEY = "wMKrTYELUOSj_iH9JyEnkky0Ar2Sul34KLVxeixPhdM"
 
-# Store push subscriptions
-subscriptions = []
+# Initialize subscription storage
+if "subscriptions" not in st.session_state:
+    st.session_state.subscriptions = []
 
 # ===================
-# FLASK BACKEND
-# ===================
-flask_app = Flask(__name__)
-
-@flask_app.route("/save-subscription", methods=["POST"])
-def save_subscription():
-    subscription = request.json
-    subscriptions.append(subscription)
-    print("New subscription:", subscription)
-    return {"status": "saved"}
-
-def run_flask():
-    flask_app.run()
-
-# Start Flask in background
-threading.Thread(target=run_flask, daemon=True).start()
-
-# ===================
-# STREAMLIT APP
+# STREAMLIT UI
 # ===================
 st.set_page_config(page_title="Quran Reminder", page_icon="📖")
 st.title("📖 Quran Reminder PWA")
 
+# Inject manifest + service worker
 components.html(f"""
 <link rel="manifest" href="manifest.json">
 <script>
@@ -59,11 +39,9 @@ components.html(f"""
           }}).then(function(subscription) {{
             console.log("Subscribed:", JSON.stringify(subscription));
 
-            fetch('http://localhost:5001/save-subscription', {{
-              method: 'POST',
-              headers: {{ 'Content-Type': 'application/json' }},
-              body: JSON.stringify(subscription)
-            }});
+            // Send subscription to Streamlit via postMessage
+            const data = JSON.stringify(subscription);
+            window.parent.postMessage({{ isStreamlitMessage: true, type: "push-subscription", payload: data }}, "*");
           }});
         }}
       }});
@@ -72,6 +50,14 @@ components.html(f"""
 </script>
 """, height=0)
 
+# Capture subscriptions from postMessage
+subscription_message = st.experimental_get_query_params().get("subscription")
+if subscription_message:
+    sub = json.loads(subscription_message[0])
+    if sub not in st.session_state.subscriptions:
+        st.session_state.subscriptions.append(sub)
+
+# UI controls
 reminder_time = st.time_input("🕒 Set your daily Quran reminder time", value=datetime.time(8, 0))
 surah = st.selectbox("📖 Choose today's Surah", [
     "Al-Fatiha", "Al-Baqarah", "Al-Imran", "An-Nisa", "Al-Ma'idah"
@@ -79,10 +65,10 @@ surah = st.selectbox("📖 Choose today's Surah", [
 
 st.success(f"Reminder set for {reminder_time.strftime('%I:%M %p')} to read {surah}")
 
-# Function to send push
+# Push function
 def send_push_to_all(title, body, url="/"):
     payload = json.dumps({"title": title, "body": body, "url": url})
-    for sub in subscriptions:
+    for sub in st.session_state.subscriptions:
         try:
             webpush(
                 subscription_info=sub,
@@ -93,6 +79,7 @@ def send_push_to_all(title, body, url="/"):
         except WebPushException as ex:
             print("Web push failed:", repr(ex))
 
+# Send now button
 if st.button("🔔 Send Reminder Now"):
     send_push_to_all(
         title="📖 Quran Reminder",
@@ -100,5 +87,3 @@ if st.button("🔔 Send Reminder Now"):
         url="https://quran.com"
     )
     st.success("Push notification sent!")
-
-
