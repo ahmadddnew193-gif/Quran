@@ -10,7 +10,7 @@ time_choice = st.text_input("Choose Time (HH:MM)", value="17:45")
 channel_id = st.text_input("Discord Channel ID", value="YOUR_CHANNEL_ID")
 bot_token = st.text_input("Bot Token", type="password",value="xMTY5NjEzOTY2MDU2MjY0Mw.G-1SJh.FA5kGGRMo2T-EWgQAdK1O_qBB-KJp1Lsd6QRMU")
 
-if st.check_box("Start Reminder"):
+if st.checkbox("Start Reminder"):
     st.success(f"Reminder set for {time_choice}. App will check every minute.")
 
 
@@ -37,4 +37,5 @@ if st.check_box("Start Reminder"):
             
 
         
+
 
