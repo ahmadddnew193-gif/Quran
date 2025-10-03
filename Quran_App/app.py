@@ -31,7 +31,7 @@ def save_subscription():
     return {"status": "saved"}
 
 def run_flask():
-    flask_app.run(port=5001)
+    flask_app.run(port=4578)
 
 # Start Flask in background
 threading.Thread(target=run_flask, daemon=True).start()
@@ -100,3 +100,4 @@ if st.button("🔔 Send Reminder Now"):
         url="https://quran.com"
     )
     st.success("Push notification sent!")
+
