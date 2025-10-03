@@ -1,90 +1,74 @@
 import streamlit as st
-import streamlit.components.v1 as components
-import datetime
 import json
 from pywebpush import webpush, WebPushException
 
-# ===================
-# CONFIG
-# ===================
-
 VAPID_PUBLIC_KEY = "BMceqKk9S3NwZQDRVoHSQxMGT3xbLgm_Ve4PpJ4YOwp-i6FhqNNeta0UcWh5IEpiEdfvzmV245t8wR6wtJa7bJs"
 VAPID_PRIVATE_KEY = "wMKrTYELUOSj_iH9JyEnkky0Ar2Sul34KLVxeixPhdM"
+VAPID_CLAIMS = {"sub": "mailto:ahmadddnew193@gmail.com@gmail.com"}
 
-# Initialize subscription storage
 if "subscriptions" not in st.session_state:
-    st.session_state.subscriptions = []
+    st.session_state["subscriptions"] = []
 
-# ===================
-# STREAMLIT UI
-# ===================
-st.set_page_config(page_title="Quran Reminder", page_icon="📖")
-st.title("📖 Quran Reminder PWA")
+st.title("📖 Quran Reminder")
+st.write("Enable push notifications below:")
 
-# Inject manifest + service worker
-components.html(f"""
-<link rel="manifest" href="manifest.json">
-<script>
-  if ('serviceWorker' in navigator) {{
-    navigator.serviceWorker.register('service-worker.js').then(function(reg) {{
-      console.log('Service Worker registered:', reg);
+st.markdown(
+    f"""
+    <script>
+    async function urlBase64ToUint8Array(base64String) {{
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {{
+        outputArray[i] = rawData.charCodeAt(i);
+      }}
+      return outputArray;
+    }}
 
-      Notification.requestPermission().then(function(result) {{
-        if (result === 'granted') {{
-          console.log("Notifications allowed.");
+    async function subscribe() {{
+      const registration = await navigator.serviceWorker.register("service-worker.js");
+      console.log("Service worker registered:", registration);
 
-          reg.pushManager.subscribe({{
-            userVisibleOnly: true,
-            applicationServerKey: "{VAPID_PUBLIC_KEY}"
-          }}).then(function(subscription) {{
-            console.log("Subscribed:", JSON.stringify(subscription));
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {{
+        alert("Notifications blocked. Please allow them in your browser.");
+        return;
+      }}
 
-            // Send subscription to Streamlit via postMessage
-            const data = JSON.stringify(subscription);
-            window.parent.postMessage({{ isStreamlitMessage: true, type: "push-subscription", payload: data }}, "*");
-          }});
-        }}
+      const subscription = await registration.pushManager.subscribe({{
+        userVisibleOnly: true,
+        applicationServerKey: await urlBase64ToUint8Array("{VAPID_PUBLIC_KEY}")
       }});
-    }});
-  }}
-</script>
-""", height=0)
 
-# Capture subscriptions from postMessage
-subscription_message = st.query_params.get("subscription")
-if subscription_message:
-    sub = json.loads(subscription_message[0])
-    if sub not in st.session_state.subscriptions:
-        st.session_state.subscriptions.append(sub)
+      fetch("/subscribe", {{
+        method: "POST",
+        headers: {{ "Content-Type": "application/json" }},
+        body: JSON.stringify(subscription)
+      }});
 
-# UI controls
-reminder_time = st.time_input("🕒 Set your daily Quran reminder time", value=datetime.time(8, 0))
-surah = st.selectbox("📖 Choose today's Surah", [
-    "Al-Fatiha", "Al-Baqarah", "Al-Imran", "An-Nisa", "Al-Ma'idah"
-])
+      alert("Notifications enabled!");
+    }}
+    </script>
+    <button onclick="subscribe()">Enable Notifications</button>
+    """,
+    unsafe_allow_html=True
+)
 
-st.success(f"Reminder set for {reminder_time.strftime('%I:%M %p')} to read {surah}")
+st.write("Current subscriptions:", st.session_state["subscriptions"])
 
-# Push function
-def send_push_to_all(title, body, url="/"):
-    payload = json.dumps({"title": title, "body": body, "url": url})
-    for sub in st.session_state.subscriptions:
+if st.button("Send Reminder Now"):
+    payload = json.dumps({"title": "Quran Reminder", "body": "Time to read Quran 🤲"})
+    for sub in st.session_state["subscriptions"]:
         try:
             webpush(
                 subscription_info=sub,
                 data=payload,
                 vapid_private_key=VAPID_PRIVATE_KEY,
-                vapid_claims={"sub": "mailto:you@example.com"}
+                vapid_claims=VAPID_CLAIMS
             )
-        except WebPushException as ex:
-            print("Web push failed:", repr(ex))
+            st.success("Notification sent!")
+        except WebPushException as e:
+            st.error(f"Push error: {e}")
 
-# Send now button
-if st.button("🔔 Send Reminder Now"):
-    send_push_to_all(
-        title="📖 Quran Reminder",
-        body=f"Time to read {surah}! May Allah bless your day 🌙",
-        url="https://quran.com"
-    )
-    st.success("Push notification sent!")
 
