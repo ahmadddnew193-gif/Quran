@@ -51,7 +51,7 @@ components.html(f"""
 """, height=0)
 
 # Capture subscriptions from postMessage
-subscription_message = st.experimental_get_query_params().get("subscription")
+subscription_message = st.query_params.get("subscription")
 if subscription_message:
     sub = json.loads(subscription_message[0])
     if sub not in st.session_state.subscriptions:
@@ -87,3 +87,4 @@ if st.button("🔔 Send Reminder Now"):
         url="https://quran.com"
     )
     st.success("Push notification sent!")
+
